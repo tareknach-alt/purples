@@ -1,0 +1,209 @@
+{
+  "name": "Purples - Brand Email Scraper",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "/data/unique_brand_names.json"
+      },
+      "name": "Read Brand JSON",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "mode": "jsonToBinary",
+        "options": {}
+      },
+      "name": "Convert to JSON",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://google.serper.dev/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "a7551bd1c3ed0f908289e0fa7e946f92d27c0ef0"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "=\"{{ $json.brand }} CEO OR CMO OR Marketing Director email contact\""
+            },
+            {
+              "name": "gl",
+              "value": "us"
+            },
+            {
+              "name": "num",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Serper Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\n\nfor (const item of $input.all()) {\n  const brand = item.json.brand || 'Unknown';\n  const organic = item.json.organic || [];\n  \n  const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\\.[a-zA-Z0-9_-]+)/gi;\n  const nameRegex = /\\b([A-Z][a-z]+ [A-Z][a-z]+)\\b/g;\n  const titleRegex = /\\b(CEO|Chief Executive Officer|CMO|Chief Marketing Officer|Marketing Director|Head of Marketing|VP Marketing|Marketing Manager)\\b/gi;\n  \n  organic.forEach(result => {\n    const text = (result.snippet || '') + ' ' + (result.title || '');\n    \n    const emails = text.match(emailRegex) || [];\n    const names = text.match(nameRegex) || [];\n    const titles = text.match(titleRegex) || [];\n    \n    emails.forEach((email, idx) => {\n      // Filter out common generic emails\n      if (!email.match(/^(info|contact|support|hello|noreply|admin)@/i)) {\n        items.push({\n          json: {\n            brand_name: brand,\n            contact_name: names[idx] || 'N/A',\n            contact_title: titles[idx] || 'N/A',\n            email_found: email,\n            source_url: result.link || 'N/A'\n          }\n        });\n      }\n    });\n  });\n}\n\nreturn items;"
+      },
+      "name": "Extract Emails & Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "options": {
+          "wait": 1
+        }
+      },
+      "name": "Wait 1sec",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "fileName": "purples_contacts_scraping.csv",
+        "options": {
+          "columns": {
+            "column": [
+              {
+                "name": "brand_name"
+              },
+              {
+                "name": "contact_name"
+              },
+              {
+                "name": "contact_title"
+              },
+              {
+                "name": "email_found"
+              }
+            ]
+          }
+        }
+      },
+      "name": "Export to CSV",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Read Brand JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Brand JSON": {
+      "main": [
+        [
+          {
+            "node": "Convert to JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to JSON": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Serper Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Serper Search": {
+      "main": [
+        [
+          {
+            "node": "Extract Emails & Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Emails & Info": {
+      "main": [
+        [
+          {
+            "node": "Wait 1sec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 1sec": {
+      "main": [
+        [
+          {
+            "node": "Export to CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
